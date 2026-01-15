@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCM Test Client</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      color: #fff;
+      padding: 2rem;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { 
+      font-size: 2rem; 
+      margin-bottom: 0.5rem;
+      background: linear-gradient(90deg, #00d9ff, #00ff88);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle { color: #888; margin-bottom: 2rem; }
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .card h2 { font-size: 1rem; color: #00d9ff; margin-bottom: 1rem; }
+    .token-box {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      word-break: break-all;
+      color: #58a6ff;
+      min-height: 60px;
+    }
+    .btn {
+      background: linear-gradient(90deg, #00d9ff, #00ff88);
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      color: #000;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 1rem;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+    .btn:hover { transform: translateY(-2px); opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-copy { background: #30363d; color: #fff; margin-left: 0.5rem; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+    .status.pending { background: rgba(255,193,7,0.2); color: #ffc107; }
+    .status.ready { background: rgba(0,255,136,0.2); color: #00ff88; }
+    .status.error { background: rgba(255,82,82,0.2); color: #ff5252; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .status.pending .dot { background: #ffc107; }
+    .status.ready .dot { background: #00ff88; animation: pulse 1.5s infinite; }
+    .status.error .dot { background: #ff5252; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .config-input {
+      width: 100%;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 0.75rem;
+      color: #fff;
+      font-family: monospace;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+    }
+    .config-input:focus { outline: none; border-color: #00d9ff; }
+    label { display: block; color: #888; font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .flex { display: flex; gap: 0.5rem; }
+    .counter { font-size: 3rem; font-weight: 700; color: #00ff88; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔔 FCM Test Client</h1>
+    <p class="subtitle">Generate FCM Token & receive push notifications in browser</p>
+
+    <div id="status" class="status pending">
+      <span class="dot"></span>
+      <span id="statusText">Waiting for configuration...</span>
+    </div>
+
+    <!-- Configuration -->
+    <div class="card">
+      <h2>⚙️ Firebase Configuration</h2>
+      <label>Firebase Config (from Firebase Console → Project Settings → Your apps)</label>
+      <textarea id="firebaseConfig" class="config-input" rows="8" placeholder='{
+  "apiKey": "...",
+  "authDomain": "...",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'></textarea>
+      <label>VAPID Key (from Cloud Messaging → Web Push certificates)</label>
+      <input type="text" id="vapidKey" class="config-input" placeholder="BxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxW8">
+      <button id="initBtn" class="btn">Initialize Firebase</button>
+    </div>
+
+    <!-- Token -->
+    <div class="card">
+      <h2>🔑 FCM Token</h2>
+      <div id="tokenBox" class="token-box">Token will appear here after initialization...</div>
+      <div class="flex">
+        <button id="getTokenBtn" class="btn" disabled>Get Token</button>
+        <button id="copyBtn" class="btn btn-copy" disabled>📋 Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getMessaging, getToken, onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
+
+    let messaging = null;
+
+    const statusEl = document.getElementById('status');
+    const statusTextEl = document.getElementById('statusText');
+    const tokenBox = document.getElementById('tokenBox');
+    const getTokenBtn = document.getElementById('getTokenBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const initBtn = document.getElementById('initBtn');
+
+    function setStatus(type, text) {
+      statusEl.className = `status ${type}`;
+      statusTextEl.textContent = text;
+    }
+
+    // Save config to IndexedDB for Service Worker
+    function saveConfigToDB(config) {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open('fcm-test-client', 1);
+        
+        request.onerror = () => reject(request.error);
+        
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains('config')) {
+            db.createObjectStore('config');
+          }
+        };
+        
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction('config', 'readwrite');
+          const store = tx.objectStore('config');
+          store.put(config, 'firebaseConfig');
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+    }
+
+    // Notify Service Worker to reinitialize
+    async function notifyServiceWorker() {
+      const registration = await navigator.serviceWorker.ready;
+      registration.active.postMessage({ type: 'INIT_FIREBASE' });
+    }
+
+    // Initialize Firebase
+    initBtn.addEventListener('click', async () => {
+      try {
+        const configText = document.getElementById('firebaseConfig').value;
+        const vapidKey = document.getElementById('vapidKey').value;
+
+        if (!configText || !vapidKey) {
+          alert('Please fill in Firebase Config and VAPID Key');
+          return;
+        }
+
+        const firebaseConfig = JSON.parse(configText);
+        
+        setStatus('pending', 'Saving config and initializing...');
+        
+        // Save config to IndexedDB for Service Worker
+        await saveConfigToDB(firebaseConfig);
+        
+        // Initialize Firebase in main page
+        const app = initializeApp(firebaseConfig);
+        messaging = getMessaging(app);
+
+        // Register service worker
+        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        console.log('Service Worker registered:', registration);
+        
+        // Wait for SW to be ready and notify it
+        await navigator.serviceWorker.ready;
+        await notifyServiceWorker();
+
+        setStatus('ready', 'Firebase initialized! Click "Get Token"');
+        getTokenBtn.disabled = false;
+        initBtn.disabled = true;
+        initBtn.textContent = '✓ Initialized';
+
+        // Store VAPID key
+        window.VAPID_KEY = vapidKey;
+
+        // Listen for foreground messages
+        onMessage(messaging, (payload) => {
+          console.log('Message received:', payload);
+          const title = payload.notification?.title || 'Notification';
+          const body = payload.notification?.body || JSON.stringify(payload.data);
+          
+          if (Notification.permission === 'granted') {
+            new Notification(title, { body });
+          }
+        });
+
+      } catch (error) {
+        console.error('Init error:', error);
+        setStatus('error', `Error: ${error.message}`);
+      }
+    });
+
+    // Get Token
+    getTokenBtn.addEventListener('click', async () => {
+      try {
+        setStatus('pending', 'Requesting notification permission...');
+        
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          setStatus('error', 'Notification permission denied');
+          return;
+        }
+
+        setStatus('pending', 'Getting FCM token...');
+        
+        const token = await getToken(messaging, { vapidKey: window.VAPID_KEY });
+
+        if (token) {
+          tokenBox.textContent = token;
+          copyBtn.disabled = false;
+          setStatus('ready', '✓ Token received! Ready to receive notifications');
+          console.log('FCM Token:', token);
+        } else {
+          setStatus('error', 'Failed to get token');
+        }
+      } catch (error) {
+        console.error('Token error:', error);
+        setStatus('error', `Error: ${error.message}`);
+      }
+    });
+
+    // Copy Token
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(tokenBox.textContent);
+      copyBtn.textContent = '✓ Copied!';
+      setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 2000);
+    });
+  </script>
+</body>
+</html>
