@@ -169,6 +169,11 @@ docker-compose logs app | grep ERROR
 
 ## Testing
 
+### Using Test Client
+For a better end-to-end experience including seeing the notification on your desktop:
+1. Follow the setup in [test-client/README.md](test-client/README.md)
+2. Open the UI, get a token, and send a message using that token.
+
 ### Send Test Message
 
 Using RabbitMQ Management UI (http://localhost:15672):
@@ -200,11 +205,6 @@ docker-compose logs -f app
 
 **Check topic:**
 Navigate to RabbitMQ Management → Exchanges → `notification.done`
-
-### 3. Using Test Client (Recommended)
-For a better end-to-end experience including seeing the notification on your desktop:
-1. Follow the setup in [test-client/README.md](test-client/README.md)
-2. Open the UI, get a token, and send a message using that token.
 
 ## API Endpoints
 

@@ -56,3 +56,7 @@ Send to RabbitMQ queue `notification.fcm`:
 ## Why paste the config?
 
 To keep the service secure and versatile, the config is stored in your browser's **IndexedDB**. This allows the Service Worker to initialize without hardcoded credentials in the source code.
+
+## Screenshots
+
+![FCM Web Client](../fcm-test-client-web.png)
