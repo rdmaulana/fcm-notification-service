@@ -25,7 +25,7 @@ Scalable notification service that consumes messages from RabbitMQ and delivers 
 ### 1. Clone the repository
 ```bash
 git clone <repository-url>
-cd imbee-notification-service
+cd fcm-notification-service
 ```
 
 ### 2. Configure environment
