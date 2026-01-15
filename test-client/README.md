@@ -18,13 +18,13 @@ From Firebase Console:
 3. Copy the `firebaseConfig` JSON object.
 
 ### 3. Serve the Files
-Service Worker requires an HTTP server. Run this from the **project root**:
+Service Worker requires an HTTP server. Run this from under **test-client** directory:
 ```bash
-npx serve .
+cd test-client && npx serve .
 ```
 
 ### 4. Open Browser
-Go to: `http://localhost:3000/test-client/` (or the port provided by `serve`).
+Go to: `http://localhost:3000/` (or the port provided by `serve`).
 
 ## Usage
 
